@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image to PDF Generator</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Inter font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- jsPDF Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 1rem; /* Rounded corners */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            padding: 2.5rem;
+            width: 100%;
+            max-width: 960px;
+        }
+        .file-input-label {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem 1.25rem;
+            background-color: #4f46e5;
+            color: white;
+            border-radius: 0.75rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            font-weight: 600;
+        }
+        .file-input-label:hover {
+            background-color: #4338ca;
+        }
+        .remove-button {
+            background-color: #ef4444; /* red-500 */
+            color: white;
+            border-radius: 9999px; /* full rounded */
+            padding: 0.25rem; /* p-1 */
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .group:hover .remove-button {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="selection:bg-indigo-300">
+    <div class="container">
+        <h1 class="text-3xl font-extrabold text-gray-900 mb-6 text-center">Image to PDF Generator</h1>
+
+        <div class="space-y-6">
+            <!-- Message Box for alerts/info -->
+            <div id="messageBox" class="mt-4 p-4 bg-blue-100 text-blue-800 rounded-lg hidden" role="alert">
+                <p id="messageText"></p>
+            </div>
+
+            <!-- Report Header Text Input (Optional) -->
+            <div>
+                <label for="reportHeaderText" class="block text-lg font-medium text-gray-700 mb-2">Optional: Report Header Text (appears on every page)</label>
+                <input type="text" id="reportHeaderText" placeholder="e.g., Company Report, Q2 Summary" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-base transition duration-150 ease-in-out">
+            </div>
+
+            <!-- Image List Section -->
+            <div class="border border-gray-200 rounded-lg p-4 mt-6">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4">Images to Include in PDF</h2>
+                <div id="imageSlotsContainer" class="space-y-6">
+                    <!-- Dynamic image slots will be added here -->
+                </div>
+                <button id="addImageSlotBtn" class="mt-6 w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2.5 px-5 rounded-lg shadow transition duration-200 ease-in-out">
+                    + Add Another Image
+                </button>
+            </div>
+
+            <!-- Generate PDF Button -->
+            <button id="generatePdfBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition duration-200 ease-in-out transform hover:-translate-y-1 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                Generate PDF
+            </button>
+
+            <!-- PDF Download Link/Preview (Hidden until PDF is generated) -->
+            <div id="pdfOutput" class="mt-6 hidden">
+                <h2 class="text-xl font-semibold text-gray-800 mb-3">Generated PDF:</h2>
+                <a id="downloadPdfLink" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition duration-150 ease-in-out" download="labeled_images.pdf">
+                    <svg class="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    Download PDF
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Ensure jsPDF is available
+        const { jsPDF } = window.jspdf;
+
+        // Get DOM elements
+        const reportHeaderText = document.getElementById('reportHeaderText');
+        const imageSlotsContainer = document.getElementById('imageSlotsContainer');
+        const addImageSlotBtn = document.getElementById('addImageSlotBtn');
+        const generatePdfBtn = document.getElementById('generatePdfBtn');
+        const messageBox = document.getElementById('messageBox');
+        const messageText = document.getElementById('messageText');
+        const pdfOutput = document.getElementById('pdfOutput');
+        const downloadPdfLink = document.getElementById('downloadPdfLink');
+
+        // Array to store image data: { id: string, file: File | null, label: string }
+        let uploadedImages = [];
+
+        // Function to display messages to the user
+        function showMessage(message, type = 'info') {
+            messageText.textContent = message;
+            messageBox.classList.remove('hidden');
+            messageBox.classList.remove('bg-red-100', 'text-red-800', 'bg-blue-100', 'text-blue-800', 'bg-green-100', 'text-green-800');
+            if (type === 'error') {
+                messageBox.classList.add('bg-red-100', 'text-red-800');
+            } else if (type === 'success') {
+                messageBox.classList.add('bg-green-100', 'text-green-800');
+            } else {
+                messageBox.classList.add('bg-blue-100', 'text-blue-800');
+            }
+        }
+
+        // Function to hide the message box
+        function hideMessage() {
+            messageBox.classList.add('hidden');
+        }
+
+        // Function to add a new image slot to the UI and data array
+        function addImageSlot(initialFile = null, initialLabel = '') {
+            hideMessage();
+            const id = crypto.randomUUID(); // Generate a unique ID for this slot
+
+            // Create the HTML elements for an image slot
+            const slotDiv = document.createElement('div');
+            slotDiv.id = `image-slot-${id}`;
+            slotDiv.className = 'border border-gray-300 rounded-lg p-4 bg-gray-50 relative group';
+            slotDiv.innerHTML = `
+                <button data-id="${id}" class="remove-button absolute top-2 right-2 z-10">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+                <div class="flex flex-col sm:flex-row items-center sm:space-x-4 space-y-4 sm:space-y-0">
+                    <div class="flex-shrink-0 w-full sm:w-1/3 md:w-1/4">
+                        <label for="image-upload-${id}" class="file-input-label h-24 w-full cursor-pointer flex items-center justify-center border-dashed border-2 border-gray-400 text-gray-600 rounded-lg">
+                            <span id="image-upload-text-${id}">Choose Image</span>
+                            <input type="file" id="image-upload-${id}" accept="image/*" class="hidden" data-id="${id}">
+                        </label>
+                        <img id="image-preview-${id}" src="" alt="Image Preview" class="mt-2 w-full h-24 object-contain rounded-lg shadow-md hidden">
+                    </div>
+                    <div class="flex-grow w-full">
+                        <label for="label-text-${id}" class="block text-sm font-medium text-gray-700 mb-1">Receipt #: <input type="text" id="label-text-${id}" placeholder="Enter receipt number" class="inline-block w-auto px-3 py-1 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" value="${initialLabel}" data-id="${id}"></label>
+                    </div>
+                </div>
+            `;
+            imageSlotsContainer.appendChild(slotDiv);
+
+            // Add the image data to our array
+            uploadedImages.push({ id: id, file: initialFile, label: initialLabel });
+
+            // Handle initial file if provided (e.g., when loading existing data)
+            if (initialFile) {
+                const imgPreview = document.getElementById(`image-preview-${id}`);
+                const fileUploadText = document.getElementById(`image-upload-text-${id}`);
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    imgPreview.src = e.target.result;
+                    imgPreview.classList.remove('hidden');
+                    fileUploadText.classList.add('hidden');
+                };
+                reader.readAsDataURL(initialFile);
+            }
+        }
+
+        // Initial image slot when the page loads
+        addImageSlot(null, '');
+
+        // Event listener for adding new image slots
+        addImageSlotBtn.addEventListener('click', () => {
+            addImageSlot(null, '');
+        });
+
+        // Event delegation for dynamically added elements (image upload, label input, remove button)
+        imageSlotsContainer.addEventListener('change', (event) => {
+            const target = event.target;
+            if (target.matches('input[type="file"][id^="image-upload-"]')) {
+                const id = target.dataset.id;
+                const file = target.files[0];
+                const imgPreview = document.getElementById(`image-preview-${id}`);
+                const fileUploadText = document.getElementById(`image-upload-text-${id}`);
+
+                if (file && file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        imgPreview.src = e.target.result;
+                        imgPreview.classList.remove('hidden');
+                        fileUploadText.classList.add('hidden');
+                    };
+                    reader.readAsDataURL(file);
+
+                    const imageEntry = uploadedImages.find(img => img.id === id);
+                    if (imageEntry) {
+                        imageEntry.file = file;
+                    }
+                } else if (file) {
+                    showMessage(`File '${file.name}' is not an image and was not added to slot.`, 'error');
+                    target.value = ''; // Clear file input
+                    imgPreview.classList.add('hidden');
+                    fileUploadText.classList.remove('hidden');
+                    const imageEntry = uploadedImages.find(img => img.id === id);
+                    if (imageEntry) {
+                        imageEntry.file = null;
+                    }
+                } else {
+                    imgPreview.classList.add('hidden');
+                    fileUploadText.classList.remove('hidden');
+                    const imageEntry = uploadedImages.find(img => img.id === id);
+                    if (imageEntry) {
+                        imageEntry.file = null;
+                    }
+                }
+            }
+        });
+
+        imageSlotsContainer.addEventListener('input', (event) => {
+            const target = event.target;
+            if (target.matches('input[type="text"][id^="label-text-"]')) {
+                const id = target.dataset.id;
+                const label = target.value;
+                const imageEntry = uploadedImages.find(img => img.id === id);
+                if (imageEntry) {
+                    imageEntry.label = label;
+                }
+            }
+        });
+
+        imageSlotsContainer.addEventListener('click', (event) => {
+            const target = event.target.closest('.remove-button');
+            if (target) {
+                const idToRemove = target.dataset.id;
+                uploadedImages = uploadedImages.filter(img => img.id !== idToRemove);
+                document.getElementById(`image-slot-${idToRemove}`).remove();
+                showMessage(`Removed image slot.`, 'info');
+            }
+        });
+
+        // Generate PDF functionality
+        generatePdfBtn.addEventListener('click', async () => {
+            hideMessage();
+            const imagesToProcess = uploadedImages.filter(img => img.file !== null);
+
+            if (imagesToProcess.length === 0) {
+                showMessage("Please upload at least one image in an image slot.", 'error');
+                return;
+            }
+
+            const headerText = reportHeaderText.value.trim();
+
+            showMessage("Generating PDF...", 'info');
+            generatePdfBtn.disabled = true;
+            generatePdfBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+            try {
+                const doc = new jsPDF({
+                    orientation: 'portrait',
+                    unit: 'pt',
+                    format: 'a4'
+                });
+
+                const pageWidth = doc.internal.pageSize.getWidth();
+                const pageHeight = doc.internal.pageSize.getHeight();
+                const margin = 30;
+
+                // Loop through each uploaded image and add to PDF
+                for (let i = 0; i < imagesToProcess.length; i++) {
+                    const imageEntry = imagesToProcess[i];
+                    const file = imageEntry.file;
+                    const label = (imageEntry.label.trim() ? `Receipt #: ${imageEntry.label.trim()}` : '');
+
+                    const reader = new FileReader();
+
+                    await new Promise((resolve, reject) => {
+                        reader.onload = (event) => {
+                            const img = new Image();
+                            img.onload = () => {
+                                // Add a new page for each image (after the first one)
+                                if (i > 0) {
+                                    doc.addPage();
+                                }
+
+                                const imgWidth = img.width;
+                                const imgHeight = img.height;
+
+                                // Define starting Y for text block and image
+                                const headerY = margin + 15;
+                                const labelY = margin + 40;
+                                const imageStartY = margin + 70; // Start image well below text block
+
+                                // Calculate available height for the image after accounting for text and margins
+                                const availableImageHeight = pageHeight - imageStartY - margin;
+
+                                let newImgWidth = pageWidth - 2 * margin;
+                                let newImgHeight = (imgHeight * newImgWidth) / imgWidth;
+
+                                // Adjust image dimensions to fit within available space, maintaining aspect ratio
+                                if (newImgHeight > availableImageHeight) {
+                                    newImgHeight = availableImageHeight;
+                                    newImgWidth = (imgWidth * newImgHeight) / imgHeight;
+                                }
+
+                                // Center the image horizontally
+                                const x = (pageWidth - newImgWidth) / 2;
+                                const y = imageStartY; // Use the calculated start Y for the image
+
+                                // Add Report Header Text if provided, at the top of every page
+                                if (headerText) {
+                                    doc.setFontSize(16);
+                                    doc.setTextColor(100, 100, 100);
+                                    doc.text(headerText, margin + 5, headerY);
+                                }
+
+                                // Add label text for the image (now includes "Receipt # ")
+                                if (label) {
+                                    doc.setFontSize(20);
+                                    doc.setTextColor(255, 0, 0); // Red color for better contrast
+                                    doc.text(label, margin + 5, labelY);
+                                }
+
+                                // Add image to PDF
+                                doc.addImage(img, 'JPEG', x, y, newImgWidth, newImgHeight, null, 'FAST');
+
+                                resolve();
+                            };
+                            img.onerror = reject;
+                            img.src = event.target.result;
+                        };
+                        reader.onerror = reject;
+                        reader.readAsDataURL(file);
+                    });
+                }
+
+                const pdfDataUri = doc.output('datauristring');
+                downloadPdfLink.href = pdfDataUri;
+                pdfOutput.classList.remove('hidden');
+                showMessage("PDF generated successfully! You can now download it.", 'success');
+
+            } catch (error) {
+                console.error("Error generating PDF:", error);
+                showMessage(`Failed to generate PDF: ${error.message}. Please try again or check console for details.`, 'error');
+            } finally {
+                generatePdfBtn.disabled = false;
+                generatePdfBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        });
+    </script>
+</body>
+</html>
