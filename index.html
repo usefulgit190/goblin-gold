@@ -3,13 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Image to PDF Generator</title>
+    <title>Expense Report Generator</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Inter font -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <!-- jsPDF Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- pdf.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script>
+        // Set the worker for pdf.js to avoid CORS issues.
+        // It's a common practice to use a CDN or a local copy.
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    </script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -24,7 +31,7 @@
         .container {
             background-color: #ffffff;
             border-radius: 1rem; /* Rounded corners */
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            box-shadow: 0 10px 15px -3-px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
             padding: 2.5rem;
             width: 100%;
             max-width: 960px;
@@ -55,11 +62,16 @@
         .group:hover .remove-button {
             opacity: 1;
         }
+        /* Style for PDF icon */
+        .pdf-icon {
+            width: 96px; /* h-24 */
+            height: 96px; /* w-24 */
+        }
     </style>
 </head>
 <body class="selection:bg-indigo-300">
     <div class="container">
-        <h1 class="text-3xl font-extrabold text-gray-900 mb-6 text-center">Image to PDF Generator</h1>
+        <h1 class="text-3xl font-extrabold text-gray-900 mb-6 text-center">Expense Report Generator</h1>
 
         <div class="space-y-6">
             <!-- Message Box for alerts/info -->
@@ -67,32 +79,43 @@
                 <p id="messageText"></p>
             </div>
 
+            <!-- Expense Report Summary File (PDF) Input -->
+            <div>
+                <label for="summaryPdfUpload" class="block text-lg font-medium text-gray-700 mb-2">Expense Report Summary File (PDF)</label>
+                <input type="file" id="summaryPdfUpload" accept="application/pdf" class="hidden">
+                <label for="summaryPdfUpload" class="file-input-label bg-gray-500 hover:bg-gray-600">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    Choose Summary PDF
+                </label>
+                <div id="summaryPdfFileName" class="text-sm text-gray-600 mt-2 italic"></div>
+            </div>
+
             <!-- Report Header Text Input (Optional) -->
             <div>
-                <label for="reportHeaderText" class="block text-lg font-medium text-gray-700 mb-2">Optional: Report Header Text (appears on every page)</label>
+                <label for="reportHeaderText" class="block text-lg font-medium text-gray-700 mb-2">Optional: Report Header Text (appears on receipt pages)</label>
                 <input type="text" id="reportHeaderText" placeholder="e.g., Company Report, Q2 Summary" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-base transition duration-150 ease-in-out">
             </div>
 
-            <!-- Image List Section -->
+            <!-- Receipts List Section -->
             <div class="border border-gray-200 rounded-lg p-4 mt-6">
-                <h2 class="text-xl font-semibold text-gray-800 mb-4">Images to Include in PDF</h2>
+                <h2 class="text-xl font-semibold text-gray-800 mb-4">Receipts to Attach (Image or PDF)</h2>
                 <div id="imageSlotsContainer" class="space-y-6">
-                    <!-- Dynamic image slots will be added here -->
+                    <!-- Dynamic receipt slots will be added here -->
                 </div>
                 <button id="addImageSlotBtn" class="mt-6 w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2.5 px-5 rounded-lg shadow transition duration-200 ease-in-out">
-                    + Add Another Image
+                    + Add Another Receipt
                 </button>
             </div>
 
             <!-- Generate PDF Button -->
             <button id="generatePdfBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition duration-200 ease-in-out transform hover:-translate-y-1 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
-                Generate PDF
+                Generate Final Report
             </button>
 
             <!-- PDF Download Link/Preview (Hidden until PDF is generated) -->
             <div id="pdfOutput" class="mt-6 hidden">
                 <h2 class="text-xl font-semibold text-gray-800 mb-3">Generated PDF:</h2>
-                <a id="downloadPdfLink" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition duration-150 ease-in-out" download="labeled_images.pdf">
+                <a id="downloadPdfLink" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition duration-150 ease-in-out" download="expense_report.pdf">
                     <svg class="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                     Download PDF
                 </a>
@@ -105,6 +128,8 @@
         const { jsPDF } = window.jspdf;
 
         // Get DOM elements
+        const summaryPdfUpload = document.getElementById('summaryPdfUpload');
+        const summaryPdfFileName = document.getElementById('summaryPdfFileName');
         const reportHeaderText = document.getElementById('reportHeaderText');
         const imageSlotsContainer = document.getElementById('imageSlotsContainer');
         const addImageSlotBtn = document.getElementById('addImageSlotBtn');
@@ -114,8 +139,8 @@
         const pdfOutput = document.getElementById('pdfOutput');
         const downloadPdfLink = document.getElementById('downloadPdfLink');
 
-        // Array to store image data: { id: string, file: File | null, label: string }
-        let uploadedImages = [];
+        let summaryFile = null;
+        let uploadedReceipts = [];
 
         // Function to display messages to the user
         function showMessage(message, type = 'info') {
@@ -136,14 +161,46 @@
             messageBox.classList.add('hidden');
         }
 
-        // Function to add a new image slot to the UI and data array
-        function addImageSlot(initialFile = null, initialLabel = '') {
-            hideMessage();
-            const id = crypto.randomUUID(); // Generate a unique ID for this slot
+        // Helper function to process a PDF file and return an array of image data URLs
+        async function processPdfToImages(file) {
+            const reader = new FileReader();
+            return new Promise((resolve, reject) => {
+                reader.onload = async (event) => {
+                    const pdfData = new Uint8Array(event.target.result);
+                    try {
+                        const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
+                        const numPages = pdf.numPages;
+                        const images = [];
 
-            // Create the HTML elements for an image slot
+                        for (let i = 1; i <= numPages; i++) {
+                            const page = await pdf.getPage(i);
+                            // Increase the scale from 1.5 to 3.0 for higher resolution
+                            const viewport = page.getViewport({ scale: 3.0 }); 
+                            const canvas = document.createElement('canvas');
+                            const context = canvas.getContext('2d');
+                            canvas.height = viewport.height;
+                            canvas.width = viewport.width;
+
+                            await page.render({ canvasContext: context, viewport: viewport }).promise;
+                            const imageData = canvas.toDataURL('image/jpeg', 0.9); // 0.9 quality for good balance
+                            images.push(imageData);
+                        }
+                        resolve(images);
+                    } catch (error) {
+                        reject(error);
+                    }
+                };
+                reader.onerror = reject;
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        // Add a new receipt slot
+        function addReceiptSlot() {
+            hideMessage();
+            const id = crypto.randomUUID();
             const slotDiv = document.createElement('div');
-            slotDiv.id = `image-slot-${id}`;
+            slotDiv.id = `receipt-slot-${id}`;
             slotDiv.className = 'border border-gray-300 rounded-lg p-4 bg-gray-50 relative group';
             slotDiv.innerHTML = `
                 <button data-id="${id}" class="remove-button absolute top-2 right-2 z-10">
@@ -151,82 +208,93 @@
                 </button>
                 <div class="flex flex-col sm:flex-row items-center sm:space-x-4 space-y-4 sm:space-y-0">
                     <div class="flex-shrink-0 w-full sm:w-1/3 md:w-1/4">
-                        <label for="image-upload-${id}" class="file-input-label h-24 w-full cursor-pointer flex items-center justify-center border-dashed border-2 border-gray-400 text-gray-600 rounded-lg">
-                            <span id="image-upload-text-${id}">Choose Image</span>
-                            <input type="file" id="image-upload-${id}" accept="image/*" class="hidden" data-id="${id}">
+                        <label for="receipt-upload-${id}" class="file-input-label h-24 w-full cursor-pointer flex items-center justify-center border-dashed border-2 border-gray-400 text-gray-600 rounded-lg">
+                            <span id="receipt-upload-text-${id}">Choose File</span>
+                            <input type="file" id="receipt-upload-${id}" accept="image/*, application/pdf" class="hidden" data-id="${id}">
                         </label>
-                        <img id="image-preview-${id}" src="" alt="Image Preview" class="mt-2 w-full h-24 object-contain rounded-lg shadow-md hidden">
+                        <img id="receipt-preview-${id}" src="" alt="File Preview" class="mt-2 w-full h-24 object-contain rounded-lg shadow-md hidden">
+                        <div id="pdf-preview-${id}" class="mt-2 w-full h-24 flex items-center justify-center bg-gray-200 rounded-lg shadow-md hidden">
+                            <svg class="pdf-icon text-gray-500" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 16a.75.75 0 01-.75-.75V11a.75.75 0 011.5 0v4.25a.75.75 0 01-.75.75zm-2.5-3a.75.75 0 01.75-.75h3a.75.75 0 010 1.5h-3a.75.75 0 01-.75-.75zm0 3a.75.75 0 01.75-.75h3a.75.75 0 010 1.5h-3a.75.75 0 01-.75-.75zM8 4a2 2 0 012-2h4a2 2 0 012 2v16a2 2 0 01-2 2H8a2 2 0 01-2-2V4a2 2 0 012-2zm0 1.5V19a.5.5 0 00.5.5h7a.5.5 0 00.5-.5V5.5a.5.5 0 00-.5-.5h-7a.5.5 0 00-.5.5z" clip-rule="evenodd"/></svg>
+                            <span id="pdf-filename-${id}" class="absolute text-xs mt-24"></span>
+                        </div>
                     </div>
                     <div class="flex-grow w-full">
-                        <label for="label-text-${id}" class="block text-sm font-medium text-gray-700 mb-1">Receipt #: <input type="text" id="label-text-${id}" placeholder="Enter receipt number" class="inline-block w-auto px-3 py-1 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" value="${initialLabel}" data-id="${id}"></label>
+                        <label for="label-text-${id}" class="block text-sm font-medium text-gray-700 mb-1">Receipt #: <input type="text" id="label-text-${id}" placeholder="Enter receipt number" class="inline-block w-auto px-3 py-1 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" data-id="${id}"></label>
                     </div>
                 </div>
             `;
             imageSlotsContainer.appendChild(slotDiv);
-
-            // Add the image data to our array
-            uploadedImages.push({ id: id, file: initialFile, label: initialLabel });
-
-            // Handle initial file if provided (e.g., when loading existing data)
-            if (initialFile) {
-                const imgPreview = document.getElementById(`image-preview-${id}`);
-                const fileUploadText = document.getElementById(`image-upload-text-${id}`);
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    imgPreview.src = e.target.result;
-                    imgPreview.classList.remove('hidden');
-                    fileUploadText.classList.add('hidden');
-                };
-                reader.readAsDataURL(initialFile);
-            }
+            uploadedReceipts.push({ id: id, file: null, label: '' });
         }
 
-        // Initial image slot when the page loads
-        addImageSlot(null, '');
+        // Initial receipt slot when the page loads
+        addReceiptSlot();
 
-        // Event listener for adding new image slots
+        // Event listener for adding new receipt slots
         addImageSlotBtn.addEventListener('click', () => {
-            addImageSlot(null, '');
+            addReceiptSlot();
         });
 
-        // Event delegation for dynamically added elements (image upload, label input, remove button)
+        // Handle Expense Report Summary File selection
+        summaryPdfUpload.addEventListener('change', (event) => {
+            hideMessage();
+            const file = event.target.files[0];
+            if (file) {
+                if (file.type === 'application/pdf') {
+                    summaryFile = file;
+                    summaryPdfFileName.textContent = `Selected: ${file.name}`;
+                } else {
+                    showMessage("Please select a PDF file for the summary.", 'error');
+                    summaryPdfFileName.textContent = '';
+                    summaryFile = null;
+                }
+            } else {
+                summaryPdfFileName.textContent = '';
+                summaryFile = null;
+            }
+        });
+
+        // Event delegation for dynamically added elements
         imageSlotsContainer.addEventListener('change', (event) => {
             const target = event.target;
-            if (target.matches('input[type="file"][id^="image-upload-"]')) {
+            if (target.matches('input[type="file"][id^="receipt-upload-"]')) {
                 const id = target.dataset.id;
                 const file = target.files[0];
-                const imgPreview = document.getElementById(`image-preview-${id}`);
-                const fileUploadText = document.getElementById(`image-upload-text-${id}`);
+                const receiptPreviewImg = document.getElementById(`receipt-preview-${id}`);
+                const receiptPreviewPdf = document.getElementById(`pdf-preview-${id}`);
+                const receiptFileUploadText = document.getElementById(`receipt-upload-text-${id}`);
+                const pdfFilename = document.getElementById(`pdf-filename-${id}`);
 
-                if (file && file.type.startsWith('image/')) {
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        imgPreview.src = e.target.result;
-                        imgPreview.classList.remove('hidden');
-                        fileUploadText.classList.add('hidden');
-                    };
-                    reader.readAsDataURL(file);
+                const receiptEntry = uploadedReceipts.find(receipt => receipt.id === id);
+                if (!receiptEntry) return;
 
-                    const imageEntry = uploadedImages.find(img => img.id === id);
-                    if (imageEntry) {
-                        imageEntry.file = file;
-                    }
-                } else if (file) {
-                    showMessage(`File '${file.name}' is not an image and was not added to slot.`, 'error');
-                    target.value = ''; // Clear file input
-                    imgPreview.classList.add('hidden');
-                    fileUploadText.classList.remove('hidden');
-                    const imageEntry = uploadedImages.find(img => img.id === id);
-                    if (imageEntry) {
-                        imageEntry.file = null;
+                if (file) {
+                    if (file.type.startsWith('image/')) {
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            receiptPreviewImg.src = e.target.result;
+                            receiptPreviewImg.classList.remove('hidden');
+                            receiptPreviewPdf.classList.add('hidden');
+                            receiptFileUploadText.classList.add('hidden');
+                        };
+                        reader.readAsDataURL(file);
+                        receiptEntry.file = file;
+                    } else if (file.type === 'application/pdf') {
+                        receiptPreviewImg.classList.add('hidden');
+                        receiptPreviewPdf.classList.remove('hidden');
+                        receiptFileUploadText.classList.add('hidden');
+                        pdfFilename.textContent = file.name;
+                        receiptEntry.file = file;
+                    } else {
+                        showMessage(`File '${file.name}' is not a valid image or PDF.`, 'error');
+                        target.value = '';
+                        receiptEntry.file = null;
                     }
                 } else {
-                    imgPreview.classList.add('hidden');
-                    fileUploadText.classList.remove('hidden');
-                    const imageEntry = uploadedImages.find(img => img.id === id);
-                    if (imageEntry) {
-                        imageEntry.file = null;
-                    }
+                    receiptPreviewImg.classList.add('hidden');
+                    receiptPreviewPdf.classList.add('hidden');
+                    receiptFileUploadText.classList.remove('hidden');
+                    receiptEntry.file = null;
                 }
             }
         });
@@ -236,9 +304,9 @@
             if (target.matches('input[type="text"][id^="label-text-"]')) {
                 const id = target.dataset.id;
                 const label = target.value;
-                const imageEntry = uploadedImages.find(img => img.id === id);
-                if (imageEntry) {
-                    imageEntry.label = label;
+                const receiptEntry = uploadedReceipts.find(receipt => receipt.id === id);
+                if (receiptEntry) {
+                    receiptEntry.label = label;
                 }
             }
         });
@@ -247,105 +315,151 @@
             const target = event.target.closest('.remove-button');
             if (target) {
                 const idToRemove = target.dataset.id;
-                uploadedImages = uploadedImages.filter(img => img.id !== idToRemove);
-                document.getElementById(`image-slot-${idToRemove}`).remove();
-                showMessage(`Removed image slot.`, 'info');
+                uploadedReceipts = uploadedReceipts.filter(receipt => receipt.id !== idToRemove);
+                document.getElementById(`receipt-slot-${idToRemove}`).remove();
+                showMessage(`Removed receipt slot.`, 'info');
             }
         });
 
         // Generate PDF functionality
         generatePdfBtn.addEventListener('click', async () => {
             hideMessage();
-            const imagesToProcess = uploadedImages.filter(img => img.file !== null);
+            const receiptsToProcess = uploadedReceipts.filter(receipt => receipt.file !== null);
+            const headerText = reportHeaderText.value.trim();
+            const hasSummary = summaryFile !== null;
 
-            if (imagesToProcess.length === 0) {
-                showMessage("Please upload at least one image in an image slot.", 'error');
+            if (receiptsToProcess.length === 0 && !hasSummary) {
+                showMessage("Please upload at least one receipt file or a summary PDF.", 'error');
                 return;
             }
-
-            const headerText = reportHeaderText.value.trim();
 
             showMessage("Generating PDF...", 'info');
             generatePdfBtn.disabled = true;
             generatePdfBtn.classList.add('opacity-50', 'cursor-not-allowed');
 
             try {
-                const doc = new jsPDF({
+                let doc = new jsPDF({
                     orientation: 'portrait',
                     unit: 'pt',
                     format: 'a4'
                 });
 
-                const pageWidth = doc.internal.pageSize.getWidth();
-                const pageHeight = doc.internal.pageSize.getHeight();
-                const margin = 30;
+                let pageCount = 0;
 
-                // Loop through each uploaded image and add to PDF
-                for (let i = 0; i < imagesToProcess.length; i++) {
-                    const imageEntry = imagesToProcess[i];
-                    const file = imageEntry.file;
-                    const label = (imageEntry.label.trim() ? `Receipt #: ${imageEntry.label.trim()}` : '');
+                // Process Summary PDF first
+                if (hasSummary) {
+                    showMessage("Processing summary PDF...", 'info');
+                    const summaryImages = await processPdfToImages(summaryFile);
+                    for (let i = 0; i < summaryImages.length; i++) {
+                        const pageImage = summaryImages[i];
+                        const img = new Image();
+                        img.src = pageImage;
+                        await new Promise(resolve => img.onload = resolve);
+                        
+                        // Check image dimensions to set page orientation
+                        if (img.width > img.height) {
+                            if (pageCount === 0) {
+                                doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+                            } else {
+                                doc.addPage('a4', 'l');
+                            }
+                        } else {
+                            if (pageCount === 0) {
+                                doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+                            } else {
+                                doc.addPage('a4', 'p');
+                            }
+                        }
+                        pageCount++;
+                        
+                        const pageWidth = doc.internal.pageSize.getWidth();
+                        const pageHeight = doc.internal.pageSize.getHeight();
+                        const margin = 30;
 
-                    const reader = new FileReader();
+                        let newImgWidth = pageWidth - 2 * margin;
+                        let newImgHeight = (img.height * newImgWidth) / img.width;
+                        const availableContentHeight = pageHeight - 2 * margin;
 
-                    await new Promise((resolve, reject) => {
-                        reader.onload = (event) => {
-                            const img = new Image();
-                            img.onload = () => {
-                                // Add a new page for each image (after the first one)
-                                if (i > 0) {
-                                    doc.addPage();
-                                }
+                        if (newImgHeight > availableContentHeight) {
+                            newImgHeight = availableContentHeight;
+                            newImgWidth = (img.width * newImgHeight) / img.height;
+                        }
+                        const x = (pageWidth - newImgWidth) / 2;
+                        const y = (pageHeight - newImgHeight) / 2;
 
-                                const imgWidth = img.width;
-                                const imgHeight = img.height;
+                        doc.addImage(img, 'JPEG', x, y, newImgWidth, newImgHeight, null, 'FAST');
+                    }
+                }
 
-                                // Define starting Y for text block and image
-                                const headerY = margin + 15;
-                                const labelY = margin + 40;
-                                const imageStartY = margin + 70; // Start image well below text block
+                // Process Receipts
+                for (let i = 0; i < receiptsToProcess.length; i++) {
+                    const receiptEntry = receiptsToProcess[i];
+                    const file = receiptEntry.file;
+                    const labelText = receiptEntry.label.trim();
+                    const receiptLabel = (labelText ? `Receipt #: ${labelText}` : '');
 
-                                // Calculate available height for the image after accounting for text and margins
-                                const availableImageHeight = pageHeight - imageStartY - margin;
+                    let imagesToProcess = [];
+                    if (file.type.startsWith('image/')) {
+                        const reader = new FileReader();
+                        const imageDataUrl = await new Promise(resolve => {
+                            reader.onload = e => resolve(e.target.result);
+                            reader.readAsDataURL(file);
+                        });
+                        imagesToProcess.push(imageDataUrl);
+                    } else if (file.type === 'application/pdf') {
+                        showMessage(`Processing PDF receipt #${labelText || i + 1}...`, 'info');
+                        imagesToProcess = await processPdfToImages(file);
+                    }
+                    
+                    for (let j = 0; j < imagesToProcess.length; j++) {
+                        if (pageCount > 0) doc.addPage('a4', 'p'); // Add a new portrait page for each receipt page
+                        pageCount++;
 
-                                let newImgWidth = pageWidth - 2 * margin;
-                                let newImgHeight = (imgHeight * newImgWidth) / imgWidth;
+                        const pageImage = imagesToProcess[j];
+                        const img = new Image();
+                        img.src = pageImage;
+                        await new Promise(resolve => img.onload = resolve);
+                        
+                        const pageWidth = doc.internal.pageSize.getWidth();
+                        const pageHeight = doc.internal.pageSize.getHeight();
+                        const margin = 30;
+                        const headerY = margin + 15;
+                        const labelY = margin + 40;
+                        const contentStartY = margin + 70;
+                        const availableContentHeight = pageHeight - contentStartY - margin;
 
-                                // Adjust image dimensions to fit within available space, maintaining aspect ratio
-                                if (newImgHeight > availableImageHeight) {
-                                    newImgHeight = availableImageHeight;
-                                    newImgWidth = (imgWidth * newImgHeight) / imgHeight;
-                                }
+                        // Add Report Header Text if provided
+                        if (headerText) {
+                            doc.setFontSize(16);
+                            doc.setTextColor(100, 100, 100);
+                            doc.text(headerText, margin + 5, headerY);
+                        }
 
-                                // Center the image horizontally
-                                const x = (pageWidth - newImgWidth) / 2;
-                                const y = imageStartY; // Use the calculated start Y for the image
+                        // Add Receipt Number as a clear label
+                        if (receiptLabel) {
+                            doc.setFontSize(20);
+                            doc.setTextColor(255, 0, 0);
+                            doc.text(receiptLabel, margin + 5, labelY);
+                        }
 
-                                // Add Report Header Text if provided, at the top of every page
-                                if (headerText) {
-                                    doc.setFontSize(16);
-                                    doc.setTextColor(100, 100, 100);
-                                    doc.text(headerText, margin + 5, headerY);
-                                }
+                        // Add Receipt Number as a watermark
+                        if (receiptLabel) {
+                            doc.setFontSize(50);
+                            doc.setTextColor(200, 200, 200, 0.4);
+                            doc.text(receiptLabel, pageWidth / 2, pageHeight / 2, { align: 'center', angle: -45 });
+                        }
 
-                                // Add label text for the image (now includes "Receipt # ")
-                                if (label) {
-                                    doc.setFontSize(20);
-                                    doc.setTextColor(255, 0, 0); // Red color for better contrast
-                                    doc.text(label, margin + 5, labelY);
-                                }
+                        let newImgWidth = pageWidth - 2 * margin;
+                        let newImgHeight = (img.height * newImgWidth) / img.width;
+                        if (newImgHeight > availableContentHeight) {
+                            newImgHeight = availableContentHeight;
+                            newImgWidth = (img.width * newImgHeight) / img.height;
+                        }
+                        const x = (pageWidth - newImgWidth) / 2;
+                        const y = contentStartY;
 
-                                // Add image to PDF
-                                doc.addImage(img, 'JPEG', x, y, newImgWidth, newImgHeight, null, 'FAST');
-
-                                resolve();
-                            };
-                            img.onerror = reject;
-                            img.src = event.target.result;
-                        };
-                        reader.onerror = reject;
-                        reader.readAsDataURL(file);
-                    });
+                        doc.addImage(img, 'JPEG', x, y, newImgWidth, newImgHeight, null, 'FAST');
+                    }
                 }
 
                 const pdfDataUri = doc.output('datauristring');
@@ -355,7 +469,7 @@
 
             } catch (error) {
                 console.error("Error generating PDF:", error);
-                showMessage(`Failed to generate PDF: ${error.message}. Please try again or check console for details.`, 'error');
+                showMessage(`Failed to generate PDF: ${error.message}. Please try again.`, 'error');
             } finally {
                 generatePdfBtn.disabled = false;
                 generatePdfBtn.classList.remove('opacity-50', 'cursor-not-allowed');
